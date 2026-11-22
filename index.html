@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anatomy 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#03060d;--panel:rgba(12,20,34,.74);--line:rgba(120,190,255,.18);--text:#e6eef8;--muted:#8ea3bd;--accent:#5cc8ff;--muscle:#ff6a55}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:"Noto Sans TC",system-ui,sans-serif;overflow:hidden}
+  #stage{position:fixed;inset:0} canvas{display:block;outline:none;touch-action:none}
+  .glass{background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+  #title{position:fixed;left:20px;top:16px;pointer-events:none}
+  #title h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.06em}
+  #title p{margin:2px 0 0;font:12px "JetBrains Mono",monospace;color:var(--accent);letter-spacing:.12em}
+  #list{position:fixed;left:20px;top:78px;bottom:96px;width:var(--listW,250px);display:flex;flex-direction:column;overflow:visible;transition:transform .35s}
+  #items{border-radius:0 0 14px 14px;flex:1;min-height:0}
+  #list.collapsed{transform:translateX(calc(-100% - 30px))}
+  #listResize{position:absolute;top:0;right:-4px;bottom:0;width:10px;cursor:ew-resize;z-index:2;touch-action:none}
+  #listResize::after{content:"";position:absolute;top:50%;right:4px;width:3px;height:44px;margin-top:-22px;border-radius:3px;background:rgba(142,163,189,.35);transition:background .15s,height .15s}
+  #listResize:hover::after,#list.resizing #listResize::after{background:var(--accent);height:72px;margin-top:-36px}
+  #list.resizing{transition:none;user-select:none}
+  #list header{padding:12px 14px 8px;display:flex;align-items:center;justify-content:space-between}
+  #list header b{font-size:13px;color:var(--muted);font-weight:500}
+  .tabs{display:flex;gap:4px;margin:0 12px 8px;padding:3px;border-radius:9px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+  .tabs button{flex:1;border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;padding:6px;border-radius:7px;cursor:pointer}
+  .tabs button.on{background:rgba(92,200,255,.18);color:#fff}
+  #search{margin:0 12px 8px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text);font:inherit;font-size:13px;outline:none}
+  #search:focus{border-color:var(--accent)}
+  #items{overflow:auto;padding:0 6px 10px;scrollbar-width:thin}
+  .grp{font-size:11px;color:var(--accent);letter-spacing:.15em;margin:12px 8px 4px;font-family:"JetBrains Mono",monospace;display:flex;justify-content:space-between}
+  .it{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:5px 8px;border-radius:7px;cursor:pointer;font-size:13px}
+  .it small{color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+  .it:hover{background:rgba(92,200,255,.1)} .it.on{background:rgba(255,106,85,.2);color:#fff} .it.hid{opacity:.4;text-decoration:line-through}
+  #toggleList{position:fixed;left:20px;bottom:24px;display:none}
+  #info{position:fixed;right:20px;top:20px;bottom:96px;width:370px;padding:22px 22px 18px;overflow:auto;transform:translateX(calc(100% + 40px));transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+  #info.show{transform:none}
+  .tag{display:inline-block;font-size:11px;padding:3px 9px;border-radius:99px;border:1px solid rgba(255,106,85,.5);color:var(--muscle);letter-spacing:.1em;margin-right:6px}
+  .tag.b{border-color:rgba(92,200,255,.45);color:var(--accent)}
+  #info h2{margin:10px 0 0;font-size:26px;letter-spacing:.03em;line-height:1.3}
+  #info .en{font:12.5px "JetBrains Mono",monospace;color:var(--muted);margin-top:4px}
+  #info dl{margin:14px 0 0}
+  #info dt{font-size:11px;color:var(--accent);letter-spacing:.15em;margin-top:14px;font-family:"JetBrains Mono",monospace}
+  #info dd{margin:4px 0 0;font-size:14px;line-height:1.65;color:#d5e0ee}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:12.5px;padding:4px 10px;border-radius:8px;background:rgba(92,200,255,.1);border:1px solid var(--line)}
+  .chip.link{cursor:pointer} .chip.link:hover{border-color:var(--accent)} .chip.cur{background:rgba(255,106,85,.2);border-color:rgba(255,106,85,.5)}
+  .note{margin-top:16px;padding:12px 14px;border-radius:10px;background:rgba(255,106,85,.08);border-left:3px solid var(--muscle);font-size:13.5px;line-height:1.6}
+  #info .nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  #close{position:absolute;right:14px;top:14px}
+  #bar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;gap:4px;padding:6px}
+  .btn{border:1px solid transparent;background:transparent;color:var(--text);font:inherit;font-size:13px;padding:8px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:rgba(92,200,255,.12)} .btn.on{background:rgba(92,200,255,.18);border-color:rgba(92,200,255,.4);color:#fff}
+  .btn.icon{padding:6px 10px;font-size:16px;line-height:1} .btn.ghost{border-color:var(--line)}
+  .btn.warn{border-color:rgba(255,106,85,.45);color:#ffb3a8}
+  #tip{position:fixed;pointer-events:none;padding:6px 10px;border-radius:8px;font-size:13px;background:rgba(8,14,24,.88);border:1px solid rgba(255,106,85,.45);opacity:0;transition:opacity .15s;white-space:nowrap}
+  #tip small{color:var(--muted);font-family:"JetBrains Mono",monospace;margin-left:6px;font-size:11px}
+  #hint{position:fixed;left:50%;top:22px;transform:translateX(-50%);font-size:12.5px;color:var(--muted);padding:7px 14px;border-radius:99px;transition:opacity 1s}
+  #coords{position:fixed;right:20px;bottom:30px;font:11px "JetBrains Mono",monospace;color:rgba(142,163,189,.7);pointer-events:none;text-align:right}
+  #credit{position:fixed;left:20px;bottom:8px;font-size:10.5px;color:rgba(142,163,189,.65)}
+  #credit a{color:inherit}
+  #loading{position:fixed;inset:0;display:grid;place-items:center;transition:opacity .8s;pointer-events:none;z-index:5}
+  #loading .box{text-align:center;color:var(--muted);letter-spacing:.2em;font-size:13px}
+  #loading .track{width:260px;height:3px;background:rgba(255,255,255,.08);border-radius:3px;margin:14px auto 0;overflow:hidden}
+  #loading .fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--muscle));transition:width .2s}
+  @media (max-width:860px){
+    #list{top:70px;bottom:auto;max-height:50vh;width:min(270px,82vw)}
+    #listResize{display:none}
+    #toggleList{display:block}
+    #info{left:10px;right:10px;top:auto;bottom:76px;width:auto;max-height:52vh;transform:translateY(calc(100% + 100px))}
+    #info.show{transform:none}
+    #bar{bottom:12px;max-width:calc(100vw - 20px);overflow-x:auto}
+    #bar .lbl{display:none}
+    #coords,#hint,#credit{display:none}
+    #title h1{font-size:17px}
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="loading"><div class="box">LOADING ANATOMY<div class="track"><div class="fill" id="lfill"></div></div><div id="lpct" style="margin-top:10px;font-size:11px">0%</div></div></div>
+
+<div id="title"><h1>人體解剖 3D</h1><p>ANATOMY GLOBE · v0.6</p></div>
+<div id="hint" class="glass">拖曳旋轉 · 滾輪縮放 · 右鍵平移 · 點擊肌肉或骨骼查看介紹 · 關閉「肌肉」可直接點骨頭</div>
+
+<aside id="list" class="glass">
+  <div id="listResize" title="拖曳調整寬度（雙擊還原）"></div>
+  <header><b id="listTitle">肌肉列表</b><button class="btn icon" id="hideList" title="收合">‹</button></header>
+  <div class="tabs" id="tabs"><button data-k="muscle" class="on">肌肉</button><button data-k="bone">骨骼</button></div>
+  <input id="search" placeholder="搜尋：胸、quad、股骨、肋…" autocomplete="off">
+  <div id="items"></div>
+</aside>
+<button id="toggleList" class="btn ghost glass">☰ 肌肉</button>
+
+<aside id="info" class="glass">
+  <button class="btn icon" id="close" title="關閉 (Esc)">✕</button>
+  <div id="iTags"></div>
+  <h2 id="iName"></h2>
+  <div class="en" id="iEn"></div>
+  <div id="iBody"></div>
+  <div class="nav">
+    <button class="btn ghost warn" id="hideSel">◌ 隱藏（看深層）</button>
+    <button class="btn ghost" id="isolate">◎ 單獨顯示</button>
+    <button class="btn ghost" id="back" style="margin-left:auto">⌂ 全身</button>
+  </div>
+</aside>
+
+<nav id="bar" class="glass">
+  <button class="btn" id="bHome" title="回到全身視角">⌂ <span class="lbl">全身</span></button>
+  <button class="btn on" id="bMus">肌肉</button>
+  <button class="btn on" id="bBone">骨骼</button>
+  <button class="btn" id="bXray">透視</button>
+  <button class="btn on" id="bRot">⟳ <span class="lbl">自轉</span></button>
+  <button class="btn warn" id="bRestore" style="display:none">↺ 還原隱藏 <span id="hidN"></span></button>
+</nav>
+<div id="tip"></div>
+<div id="coords"></div>
+<div id="credit">3D 模型：<a href="https://github.com/LluisV/Z-Anatomy" target="_blank" rel="noopener">Z-Anatomy</a>（CC BY-SA 4.0，源自 BodyParts3D © DBCLS），已簡化網格並調整為游泳選手體型</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { ZH, DETAILS, REGION_NAMES, REGION_ORDER, REGION_BLURB, boneInfo, BONE_DETAILS, BONE_REGION_NAMES, BONE_REGION_ORDER } from './data.js';
+
+const $=id=>document.getElementById(id);
+const S=0.1;                                   // cm → scene units
+const detailOf={}; DETAILS.forEach(d=>d.bases.forEach(b=>detailOf[b]=d));
+const prettyEn=b=>b.replace(/[()]/g,'').replace(/_/g,' ').replace(/\bmuscles?\b/,m=>m).replace(/\s+/g,' ').trim();
+
+/* ---------------- scene ---------------- */
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.12;
+$('stage').appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.background=(()=>{const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');
+  const gr=g.createRadialGradient(256,230,10,256,256,360);gr.addColorStop(0,'#13233d');gr.addColorStop(.45,'#070e1c');gr.addColorStop(1,'#020409');
+  g.fillStyle=gr;g.fillRect(0,0,512,512);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;})();
+const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,0.02,2000);
+const HOME_T=new THREE.Vector3(0,8.7,0), HOME_D=30;
+camera.position.set(0,40,110);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.copy(HOME_T); controls.enableDamping=true; controls.dampingFactor=.07;
+controls.minDistance=0.8; controls.maxDistance=90; controls.autoRotateSpeed=.7; controls.rotateSpeed=.7;
+
+scene.add(new THREE.HemisphereLight(0xd6e2ff,0x2a1410,.75));
+const key=new THREE.DirectionalLight(0xfff1e0,2.0); key.position.set(6,14,10); scene.add(key);
+const rim=new THREE.DirectionalLight(0x8fbfff,.9); rim.position.set(-8,6,-10); scene.add(rim);
+const fill=new THREE.DirectionalLight(0xffc0a0,.5); fill.position.set(-6,2,8); scene.add(fill);
+const back=new THREE.DirectionalLight(0xfff4e8,1.1); back.position.set(3,10,-12); scene.add(back);
+const headLamp=new THREE.PointLight(0xffffff,0,0,2); camera.add(headLamp); scene.add(camera);
+
+{ // stars
+  const N=3000,pos=new Float32Array(N*3),col=new Float32Array(N*3);
+  for(let i=0;i<N;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(260+Math.random()*400);pos.set([v.x,v.y,v.z],i*3);
+    const c=new THREE.Color().setHSL(.58+Math.random()*.1,.5,.6+Math.random()*.4);col.set([c.r,c.g,c.b],i*3);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:1.6,vertexColors:true,transparent:true,opacity:.85,depthWrite:false})));
+}
+const figure=new THREE.Group(); scene.add(figure);
+const base=new THREE.Group(); base.position.y=-1.1; scene.add(base);
+{ // holographic base
+  const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
+  const gr=g.createRadialGradient(128,128,0,128,128,128);gr.addColorStop(0,'rgba(92,200,255,.35)');gr.addColorStop(.5,'rgba(92,200,255,.08)');gr.addColorStop(1,'rgba(92,200,255,0)');
+  g.fillStyle=gr;g.fillRect(0,0,256,256);
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(7,64),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  disc.rotation.x=-Math.PI/2; base.add(disc);
+  const rm=o=>new THREE.MeshBasicMaterial({color:0x5cc8ff,transparent:true,opacity:o,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+  [[3.4,3.46,.7],[4.6,4.63,.35],[6.2,6.22,.2]].forEach(([a,b,o])=>{const r=new THREE.Mesh(new THREE.RingGeometry(a,b,128),rm(o));r.rotation.x=-Math.PI/2;base.add(r);});
+  const ticks=new THREE.Group();
+  for(let i=0;i<72;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(i%6?.03:.06,i%6?.25:.5),rm(i%6?.35:.8));const a=i/72*Math.PI*2;
+    m.position.set(Math.cos(a)*5.2,0,Math.sin(a)*5.2);m.rotation.x=-Math.PI/2;m.rotation.z=-a+Math.PI/2;ticks.add(m);}
+  base.add(ticks); base.userData.ticks=ticks;
+}
+const dust=(()=>{const N=260,pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){const a=Math.random()*Math.PI*2,r=2.5+Math.random()*6;pos.set([Math.cos(a)*r,Math.random()*20-1,Math.sin(a)*r],i*3);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const p=new THREE.Points(g,new THREE.PointsMaterial({color:0x7fd4ff,size:.06,transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending}));scene.add(p);return p;})();
+
+/* ---------------- load models ---------------- */
+const loader=new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+const progress={m:0,b:0}; const setP=()=>{const p=Math.round((progress.m*.72+progress.b*.28)*100);$('lfill').style.width=p+'%';$('lpct').textContent=p+'%';};
+const load=(url,k)=>new Promise((res,rej)=>loader.load(url,g=>{progress[k]=1;setP();res(g);},e=>{if(e.total){progress[k]=e.loaded/e.total;setP();}},rej));
+
+const boneMat=new THREE.MeshStandardMaterial({color:0xe9dfc8,roughness:.6,metalness:0});
+const cartMat=new THREE.MeshStandardMaterial({color:0xbfd2df,roughness:.45,metalness:0});
+const skeleton=new THREE.Group(), muscleGroup=new THREE.Group(); figure.add(skeleton,muscleGroup);
+const M={};            // base -> {base, zh, region, cat, meshes[], mat, baseColor}
+const pickables=[];
+const hidden=new Set();
+
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return (h>>>0)/4294967296;}
+
+function prep(gltf, isMuscle){
+  const root=gltf.scene; root.scale.setScalar(S); root.updateMatrixWorld(true);
+  const list=[]; root.traverse(o=>{if(o.isMesh) list.push(o);});
+  list.forEach(o=>{
+    o.geometry.computeVertexNormals();
+    const ex=(o.userData)||{}; const b=ex.b||o.name;
+    if(!isMuscle){
+      if(ex.c==='cartilage'){ o.visible=false; o.userData.removed=true; return; }   // 軟骨全部移除
+      if(/incisor|canine|premolar|molar/i.test(o.name)) o.position.z-=0.5;          // 牙齒往後收 5 mm
+      let e=M[b];
+      if(!e){ const bi=boneInfo(b); const teeth=bi[2]==='teeth';
+        const col=new THREE.Color(teeth?0xf4f0e6:0xe9dfc8);
+        const mat=new THREE.MeshStandardMaterial({color:col.clone(),roughness:teeth?.35:.6,metalness:0,emissive:0x000000});
+        e=M[b]={kind:'bone',base:b,zh:bi[0],region:bi[1],group:bi[2],meshes:[],mat,baseColor:col}; }
+      o.material=e.mat; o.userData.base=b; o.userData.side=ex.s; o.userData.kind='bone'; e.meshes.push(o); pickables.push(o);
+      return; }
+    let e=M[b];
+    if(!e){
+      const tendon=ex.c==='tendon';
+      const h=hash(b);
+      const col=tendon? new THREE.Color().setHSL(.09,.25,.78) : new THREE.Color().setHSL(.985+h*.035, .55+h*.12, .36+((h*7)%1)*.08);
+      const mat=new THREE.MeshPhysicalMaterial({color:col.clone(),roughness:tendon?.35:.5,metalness:0,clearcoat:tendon?.6:.3,clearcoatRoughness:.45,
+        emissive:0x000000,transparent:true,opacity:1,sheen:tendon?0:.4,sheenColor:new THREE.Color(0xff9a8a),sheenRoughness:.6});
+      const z=ZH[b]||[prettyEn(b),'T'];
+      e=M[b]={kind:'muscle',base:b,zh:z[0],region:z[1],cat:ex.c,meshes:[],mat,baseColor:col};
+    }
+    o.material=e.mat; o.userData.base=b; o.userData.side=ex.s; o.userData.kind='muscle'; e.meshes.push(o); pickables.push(o);
+  });
+  return root;
+}
+
+Promise.all([load('./muscles.glb','m'),load('./bones.glb','b')]).then(([gm,gb])=>{
+  skeleton.add(prep(gb,false));
+  muscleGroup.add(prep(gm,true));
+  Object.values(M).forEach(m=>m.kind==='bone'?nB++:nM++);
+  buildList();
+  $('loading').style.opacity=0;
+  flyTo(new THREE.Vector3(0,12.2,HOME_D),HOME_T,2.6);
+  setTimeout(()=>{$('hint').style.opacity=0;},10000);
+}).catch(err=>{ $('loading').querySelector('.box').innerHTML='模型載入失敗<br><small style="letter-spacing:0">'+err+'</small>'; console.error(err); });
+
+/* ---------------- list ---------------- */
+let listKind='muscle';
+const natural=(a,b)=>a.localeCompare(b,'zh-Hant',{numeric:true});
+function buildList(){
+  const f=$('search').value.trim().toLowerCase(); let html='', n=0;
+  const isB=listKind==='bone';
+  const all=Object.values(M).filter(m=>m.kind===listKind);
+  const order=isB?BONE_REGION_ORDER:REGION_ORDER, names=isB?BONE_REGION_NAMES:REGION_NAMES;
+  const grpZh=m=> isB ? (BONE_DETAILS[m.group]?.zh||'')+' '+(BONE_DETAILS[m.group]?.en||'') : (detailOf[m.base]?.zh||'')+' '+(detailOf[m.base]?.en||'');
+  order.forEach(r=>{
+    const ms=all.filter(m=>m.region===r && (!f || (m.zh+' '+m.base+' '+grpZh(m)).toLowerCase().includes(f)))
+      .sort(isB ? (a,b)=>natural(BONE_DETAILS[a.group].zh,BONE_DETAILS[b.group].zh)||natural(a.zh,b.zh)
+               : (a,b)=>(detailOf[b.base]?1:0)-(detailOf[a.base]?1:0) || natural(a.zh,b.zh));
+    if(!ms.length) return; n+=ms.length;
+    html+=`<div class="grp"><span>${names[r]}</span><span>${ms.length}</span></div>`+
+      ms.map(m=>`<div class="it${sel===m?' on':''}${hidden.has(m.base)?' hid':''}" data-b="${m.base}"><span>${m.zh}</span><small>${prettyEn(m.base)}</small></div>`).join('');
+  });
+  $('items').innerHTML=html||`<div class="it" style="color:var(--muted)">找不到符合的${isB?'骨骼':'肌肉'}</div>`;
+  $('listTitle').textContent=`${isB?'骨骼':'肌肉'}列表 · ${n}`;
+}
+function setListKind(k){ listKind=k; [...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.k===k)); buildList(); }
+$('tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-k]'); if(b) setListKind(b.dataset.k);});
+$('items').addEventListener('click',e=>{const it=e.target.closest('.it[data-b]');if(it){const m=M[it.dataset.b]; if(hidden.has(m.base)) unhide(m.base); select(m.base,null,null);}});
+$('search').addEventListener('input',buildList);
+$('hideList').onclick=()=>$('list').classList.add('collapsed');
+/* 左側選單寬度：拖曳右緣調整，雙擊還原，記住在這台瀏覽器 */
+(()=>{ const L=$('list'), h=$('listResize'), MIN=200, MAX=()=>Math.min(560,innerWidth*0.5);
+  const setW=w=>{ w=Math.round(Math.max(MIN,Math.min(MAX(),w))); L.style.setProperty('--listW',w+'px'); return w; };
+  try{ const w=+localStorage.getItem('anat.listW'); if(w) setW(w); }catch(e){}
+  let drag=null;
+  h.addEventListener('pointerdown',e=>{ drag={x:e.clientX,w:L.getBoundingClientRect().width}; L.classList.add('resizing'); h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener('pointermove',e=>{ if(drag) setW(drag.w+e.clientX-drag.x); });
+  const end=()=>{ if(!drag) return; drag=null; L.classList.remove('resizing'); try{ localStorage.setItem('anat.listW',parseInt(L.style.getPropertyValue('--listW'))); }catch(e){} };
+  h.addEventListener('pointerup',end); h.addEventListener('pointercancel',end);
+  h.addEventListener('dblclick',()=>{ L.style.removeProperty('--listW'); try{ localStorage.removeItem('anat.listW'); }catch(e){} });
+})();
+$('toggleList').onclick=()=>$('list').classList.toggle('collapsed');
+if(innerWidth<860) $('list').classList.add('collapsed');
+$('list').addEventListener('transitionend',()=>{$('toggleList').style.display=$('list').classList.contains('collapsed')?'block':'';});
+
+/* ---------------- selection & flight ---------------- */
+let sel=null, hover=null, flight=null, idleT=0, autoRot=true, viewOffset=0, viewOffsetTarget=0, isolated=false;
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function flyTo(pos,target,dur=1.5,local=false){
+  const t0=controls.target.clone(), o0=camera.position.clone().sub(t0);
+  // local=true: target given in figure space so it follows the floating motion
+  const tL = local? target.clone() : figure.worldToLocal(target.clone());
+  const pOff = pos.clone().sub(target);
+  const a=o0.clone().normalize(), b=pOff.clone().normalize();
+  const ang=Math.acos(THREE.MathUtils.clamp(a.dot(b),-1,1));
+  let q=new THREE.Quaternion().setFromUnitVectors(a,b);
+  if(ang>3.1){ q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI); }
+  flight={t0,tL,a,q,r0:o0.length(),r1:pOff.length(),dir0:a,start:performance.now(),
+    dur:dur*1000*(0.75+0.25*ang/Math.PI),lift:0.18*ang/Math.PI};
+  controls.enabled=false;
+}
+function homeView(){const d=camera.position.clone().sub(controls.target);d.y=0;if(d.lengthSq()<1e-3)d.set(0,0,1);d.normalize();
+  const p=HOME_T.clone().addScaledVector(d,HOME_D);p.y+=3.5;flyTo(p,HOME_T,1.6);}
+function dimOthers(){
+  Object.values(M).forEach(o=>{o.mat.color.copy(o.baseColor); if(sel && o!==sel) o.mat.color.multiplyScalar(.45); o.mat.emissive.setHex(0);});
+}
+function select(b, side, hitNormal){
+  const m=M[b]; if(!m) return; sel=m; dimOthers(); muscleAlpha();
+  if(m.kind==='bone' && !skeleton.visible){ skeleton.visible=true; $('bBone').classList.add('on'); }
+  if(m.kind==='muscle' && !muscleGroup.visible){ muscleGroup.visible=true; $('bMus').classList.add('on'); }
+  if(listKind!==m.kind) listKind=m.kind, [...$('tabs').children].forEach(x=>x.classList.toggle('on',x.dataset.k===m.kind));
+  let meshes=m.meshes.filter(x=>x.visible && (side? x.userData.side===side : true));
+  if(!side){ // pick the side nearer to the camera
+    const sides=[...new Set(m.meshes.map(x=>x.userData.side))];
+    if(sides.length>1){ let best=null,bd=1e9;
+      sides.forEach(s=>{const bb=new THREE.Box3();m.meshes.filter(x=>x.userData.side===s).forEach(x=>bb.expandByObject(x));const d=bb.getCenter(new THREE.Vector3()).distanceTo(camera.position);if(d<bd){bd=d;best=s;}});
+      meshes=m.meshes.filter(x=>x.userData.side===best);}
+  }
+  if(!meshes.length) meshes=m.meshes;
+  figure.updateMatrixWorld(true);
+  const box=new THREE.Box3(); meshes.forEach(x=>box.expandByObject(x));
+  const c=box.getCenter(new THREE.Vector3()), rad=box.getSize(new THREE.Vector3()).length()/2;
+  const out=new THREE.Vector3(c.x,0,c.z); const cur=camera.position.clone().sub(controls.target).normalize();
+  let dir;
+  if(hitNormal){ dir=hitNormal.clone().multiplyScalar(.6).add(out.lengthSq()>.04?out.normalize().multiplyScalar(.4):cur.clone().multiplyScalar(.4)); }
+  else dir = out.lengthSq()>.25 ? out.normalize() : (Math.abs(c.z)<.3 ? cur.clone() : new THREE.Vector3(0,0,Math.sign(c.z)));
+  dir.y+=.18; if(cur.dot(dir)>-0.2) dir.lerp(cur,.2); dir.normalize();
+  const dist=Math.max(1.6, rad/Math.sin(THREE.MathUtils.degToRad(camera.fov/2))*2.0);
+  flyTo(c.clone().addScaledVector(dir,dist),c,1.5);
+  showInfo(m); buildList();
+  const it=$('items').querySelector('.it.on'); if(it) it.scrollIntoView({block:'nearest'});
+  if(innerWidth<860) $('list').classList.add('collapsed');
+}
+function deselect(goHome=true){
+  sel=null; dimOthers(); muscleAlpha(); $('info').classList.remove('show'); viewOffsetTarget=0;
+  if(isolated) setIsolate(false);
+  buildList(); if(goHome) homeView();
+}
+function showInfo(m){
+  if(m.kind==='bone') return showBone(m);
+  $('hideSel').textContent='◌ 隱藏這條（看深層）';
+  const d=detailOf[m.base];
+  $('iTags').innerHTML=`<span class="tag">${REGION_NAMES[m.region]}</span>`+(d?`<span class="tag b">${d.zh}</span>`:'')+(m.cat==='tendon'?'<span class="tag b">腱／腱膜</span>':'');
+  $('iName').textContent=m.zh; $('iEn').textContent=prettyEn(m.base);
+  let h='';
+  if(d){
+    const parts=d.bases.filter(b=>M[b]);
+    if(parts.length>1) h+=`<dl><dt>PARTS · 組成（點擊切換）</dt><dd><div class="chips">${parts.map(b=>`<span class="chip link${b===m.base?' cur':''}" data-b="${b}">${M[b].zh}</span>`).join('')}</div></dd></dl>`;
+    h+=`<dl><dt>ORIGIN · 起點</dt><dd>${d.origin}</dd><dt>INSERTION · 止點</dt><dd>${d.ins}</dd><dt>ACTION · 功能</dt><dd>${d.act}</dd>
+        <dt>TRAINING · 常見訓練</dt><dd><div class="chips">${d.ex.map(e=>`<span class="chip">${e}</span>`).join('')}</div></dd></dl>
+        <div class="note">💡 ${d.note}</div>`;
+  } else {
+    h+=`<dl><dt>OVERVIEW · 概述</dt><dd>${REGION_BLURB[m.region]}</dd></dl>
+        <div class="note" style="border-color:var(--accent);background:rgba(92,200,255,.07)">這條肌肉的起止點與訓練說明尚未收錄，目前先提供名稱與位置；可點「隱藏這條」看它下方的結構。</div>`;
+  }
+  $('iBody').innerHTML=h;
+  $('info').classList.add('show'); $('info').scrollTop=0;
+  viewOffsetTarget=innerWidth>860?190:0;
+}
+function showBone(m){
+  const d=BONE_DETAILS[m.group];
+  $('hideSel').textContent='◌ 隱藏這塊';
+  $('iTags').innerHTML=`<span class="tag">${BONE_REGION_NAMES[m.region]}</span><span class="tag b">${d.zh}</span>`;
+  $('iName').textContent=m.zh; $('iEn').textContent=prettyEn(m.base);
+  const parts=Object.values(M).filter(x=>x.kind==='bone'&&x.group===m.group).sort((a,b)=>natural(a.zh,b.zh));
+  let h='';
+  if(parts.length>1 && parts.length<=14) h+=`<dl><dt>PARTS · 組成（點擊切換）</dt><dd><div class="chips">${parts.map(x=>`<span class="chip link${x===m?' cur':''}" data-b="${x.base}">${x.zh}</span>`).join('')}</div></dd></dl>`;
+  else if(parts.length>14) h+=`<dl><dt>PARTS · 組成</dt><dd>共 ${parts.length} 塊（左右各半），可在左側「骨骼」列表逐一點選</dd></dl>`;
+  h+=`<dl><dt>TYPE · 類型</dt><dd>${d.type}</dd><dt>JOINTS · 相連關節</dt><dd>${d.joints}</dd>
+      <dt>MUSCLES · 主要附著肌肉</dt><dd><div class="chips">${d.mus.map(e=>`<span class="chip">${e}</span>`).join('')}</div></dd>
+      <dt>FUNCTION · 功能</dt><dd>${d.func}</dd>
+      <dt>INJURIES · 常見傷害</dt><dd><div class="chips">${d.inj.map(e=>`<span class="chip">${e}</span>`).join('')}</div></dd></dl>
+      <div class="note">💡 ${d.note}</div>`;
+  $('iBody').innerHTML=h;
+  $('info').classList.add('show'); $('info').scrollTop=0;
+  viewOffsetTarget=innerWidth>860?190:0;
+}
+$('iBody').addEventListener('click',e=>{const c=e.target.closest('.chip.link');if(c){if(hidden.has(c.dataset.b))unhide(c.dataset.b);select(c.dataset.b,null,null);}});
+$('close').onclick=()=>deselect(false); $('back').onclick=()=>deselect(true); $('bHome').onclick=()=>deselect(true);
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return; if(e.key==='Escape')deselect(true); if((e.key==='h'||e.key==='H')&&sel) hideSel();});
+
+/* hide / isolate */
+function updHidden(){ $('bRestore').style.display=hidden.size?'':'none'; $('hidN').textContent=`(${hidden.size})`; }
+function hideSel(){ if(!sel) return; const b=sel.base; hidden.add(b); sel.meshes.forEach(x=>x.visible=false); sel=null; dimOthers(); muscleAlpha();
+  $('info').classList.remove('show'); viewOffsetTarget=0; updHidden(); buildList(); }
+function unhide(b){ hidden.delete(b); M[b].meshes.forEach(x=>x.visible=!isolated); updHidden(); }
+$('hideSel').onclick=hideSel;
+$('bRestore').onclick=()=>{ [...hidden].forEach(b=>M[b].meshes.forEach(x=>x.visible=true)); hidden.clear(); updHidden(); buildList(); };
+function setIsolate(on){ isolated=on; $('isolate').classList.toggle('on',on); $('isolate').textContent=on?'◎ 顯示全部':'◎ 單獨顯示';
+  Object.values(M).forEach(o=>o.meshes.forEach(x=>x.visible= on ? o===sel : !hidden.has(o.base))); }
+$('isolate').onclick=()=>{ if(sel) setIsolate(!isolated); };
+
+/* toolbar */
+const tog=(id,fn)=>{$(id).onclick=()=>{const on=!$(id).classList.contains('on');$(id).classList.toggle('on',on);fn(on);};};
+tog('bMus',on=>{muscleGroup.visible=on;});
+tog('bBone',on=>{skeleton.visible=on;});
+function muscleAlpha(){ const xr=$('bXray').classList.contains('on'), boneSel=sel&&sel.kind==='bone';
+  const a = xr ? .28 : (boneSel ? .16 : 1);
+  Object.values(M).filter(m=>m.kind==='muscle').forEach(m=>{m.mat.opacity=a;m.mat.depthWrite=a===1;}); }
+tog('bXray',on=>muscleAlpha());
+tog('bRot',on=>{autoRot=on;});
+
+/* ---------------- pointer ---------------- */
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(); let down=null,lastMove=null; const tip=$('tip');
+function pick(x,y){
+  ndc.set(x/innerWidth*2-1,-(y/innerHeight)*2+1); ray.setFromCamera(ndc,camera);
+  const xray=$('bXray').classList.contains('on');
+  const cand=pickables.filter(p=>p.visible && (p.userData.kind==='bone'? skeleton.visible : muscleGroup.visible));
+  const hits=ray.intersectObjects(cand,false);
+  if(xray){ const bh=hits.find(h=>h.object.userData.kind==='bone'); if(bh) return bh; }   // 透視時優先點到骨頭
+  return hits[0]||null; }
+renderer.domElement.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};idleT=0;});
+renderer.domElement.addEventListener('pointermove',e=>{lastMove={x:e.clientX,y:e.clientY};});
+renderer.domElement.addEventListener('pointerleave',()=>{lastMove=null;});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!down)return; const mv=Math.hypot(e.clientX-down.x,e.clientY-down.y); down=null; if(mv>6||flight)return;
+  const h=pick(e.clientX,e.clientY);
+  if(h){ const n=h.face.normal.clone().transformDirection(h.object.matrixWorld); select(h.object.userData.base,h.object.userData.side,n); }
+});
+renderer.domElement.addEventListener('wheel',()=>{idleT=0;},{passive:true});
+let hoverFrame=0;
+function updateHover(){
+  let b=null;
+  if(lastMove&&!down&&!flight){const h=pick(lastMove.x,lastMove.y); if(h) b=h.object.userData.base;}
+  if(hover&&hover!==sel) hover.mat.emissive.setHex(0);
+  hover=b?M[b]:null;
+  if(hover){ if(hover!==sel) hover.mat.emissive.setHex(hover.kind==='bone'?0x2c2614:0x3a1410);
+    const d=hover.kind==='bone'?BONE_DETAILS[hover.group]:detailOf[hover.base];
+    tip.innerHTML=`${hover.zh}${d&&d.zh!==hover.zh?` <span style="color:var(--muted)">· ${d.zh}</span>`:''}<small>${prettyEn(hover.base)}</small>`;
+    tip.style.left=Math.min(lastMove.x+16,innerWidth-tip.offsetWidth-8)+'px'; tip.style.top=(lastMove.y+14)+'px'; tip.style.opacity=1;
+    renderer.domElement.style.cursor='pointer';
+  } else { tip.style.opacity=0; renderer.domElement.style.cursor='grab'; }
+}
+
+/* ---------------- loop ---------------- */
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);if(sel)viewOffsetTarget=innerWidth>860?190:0;});
+const clock=new THREE.Clock(); let nM=0,nB=0;
+function loop(){
+  const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime; idleT+=dt;
+  if(flight){
+    controls.update();                                   // let any leftover damping decay while we fly
+    const k=Math.min(1,(performance.now()-flight.start)/flight.dur),e=ease(k);
+    const t1=figure.localToWorld(flight.tL.clone());
+    controls.target.lerpVectors(flight.t0,t1,e);
+    const dir=flight.dir0.clone().applyQuaternion(new THREE.Quaternion().slerp(flight.q,e));
+    const r=flight.r0*Math.pow(flight.r1/flight.r0,e)*(1+flight.lift*Math.sin(Math.PI*e));
+    camera.position.copy(controls.target).addScaledVector(dir,r);
+    camera.lookAt(controls.target);
+    if(k>=1){flight=null;controls.enabled=true;idleT=0;}
+  }
+  const amp=(sel||flight)?0:.18; const prevY=figure.position.y;
+  figure.position.y+=((Math.sin(t*.9)*amp)-figure.position.y)*.04;
+  if(!flight && sel){ const dy=figure.position.y-prevY; controls.target.y+=dy; camera.position.y+=dy; }   // camera rides along with the float
+  base.userData.ticks.rotation.y=t*.08; dust.rotation.y=t*.03;
+  controls.autoRotate=autoRot&&!sel&&!flight&&idleT>4;
+  if(sel){ const p=.55+.25*Math.sin(t*3); if(sel.kind==='bone') sel.mat.emissive.setRGB(p*.35,p*.28,p*.1); else sel.mat.emissive.setRGB(p,.12,.06).multiplyScalar(.5); }
+  const dcam=camera.position.distanceTo(controls.target);
+  headLamp.intensity = dcam<8 ? (8-dcam)/8*25 : 0;     // light up close-ups
+  viewOffset+=(viewOffsetTarget-viewOffset)*.08;
+  if(Math.abs(viewOffset)>.5) camera.setViewOffset(innerWidth,innerHeight,viewOffset,0,innerWidth,innerHeight); else camera.clearViewOffset();
+  if(!flight) controls.update();
+  if((hoverFrame++%3)===0) updateHover();
+  $('coords').textContent=`ALT ${(dcam*10).toFixed(0)} cm · AZ ${((THREE.MathUtils.radToDeg(Math.atan2(camera.position.x-controls.target.x,camera.position.z-controls.target.z))+360)%360).toFixed(0)}° · ${nM} MUSCLES · ${nB} BONES`;
+  renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+loop();
+window.__app={select,deselect,hideSel,M,camera,controls};
+</script>
+</body>
+</html>
